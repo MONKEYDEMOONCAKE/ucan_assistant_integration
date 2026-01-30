@@ -1,0 +1,13 @@
+{
+  "domain": "ucan_assistant",
+  "name": "ucan assistant",
+  "homeassistant": "2023.9.0",
+  "filename": "ucan_assistant.zip",
+  "render_readme": true,
+  "zip_release": true,
+  "config_flow": ["ucan_assistant"],
+  "files": ["www/ucan_assistant"],
+  "iot_class": "local_polling",
+  "codeowners": ["@MONKEYDEMOONCAKE"],
+  "category": "integration"
+}
