@@ -9,6 +9,8 @@ from homeassistant.config_entries import ConfigEntry
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.components import panel_custom
+from homeassistant.components.frontend import DATA_PANELS
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 
@@ -19,7 +21,6 @@ from .const import (
     CACHE_CURRENT_DEVICE,
     CACHE_DEVICE_LIST,
     CACHE_DEVICE_STATUS,
-    CACHE_DEVICE_CONFIG,
     CACHE_DEVICE_INFO,
     CACHE_DEVICE_DETAILS,
     CACHE_DEVICE_ALARMS,
@@ -69,6 +70,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await register_views(hass)
 
     entry.async_on_unload(entry.add_update_listener(async_update_options))
+
+    # 2. 使用 panel_custom 注册 iframe 面板（推荐方式）
+    # 这种方式允许你加载自定义 JS 文件作为面板
+    if "ucan-panel" not in hass.data.get(DATA_PANELS, {}):
+        await panel_custom.async_register_panel(
+            hass,
+            webcomponent_name="ucan-assistant-card",
+            frontend_url_path="ucan-panel",  # 访问路径 /ucan-panel
+            config_panel_domain="ucan_assistant",  # 关联的集成域
+            module_url="/local/community/ucan_assistant_card/ucan-assistant-card.js",  # 指向你注册的 JS 文件
+            sidebar_title="UCAN_1",  # 侧边栏标题
+            sidebar_icon="mdi:robot",  # 侧边栏图标
+            embed_iframe=False,  # 直接嵌入，不使用 iframe
+            require_admin=False,
+        )
 
     return True
 

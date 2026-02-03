@@ -21,6 +21,8 @@ class UcanAssistantCard extends HTMLElement {
 		super();
 		this.attachShadow({ mode: 'open' });
 
+
+
 		// 状态管理
 		this._hass = null;
 		this._config = {};
@@ -39,6 +41,10 @@ class UcanAssistantCard extends HTMLElement {
 		this.currentChartDate = new Date();
 		this._i18n = {};	//存储翻译文本
 		this._inv_model_json = {};	//存储逆变器型号json
+	}
+
+	connectedCallback() {
+		this.shadowRoot.innerHTML = `<h1>UCAN Assistant</h1>`;
 	}
 
 	// HA卡片必需：设置配置

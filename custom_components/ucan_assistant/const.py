@@ -42,7 +42,6 @@ DATA_UPDATE_TASK = f"{DOMAIN}_update_task"
 CACHE_CURRENT_DEVICE = "current_device"  # 对应缓存中的key
 CACHE_DEVICE_LIST = "device_list"
 CACHE_DEVICE_STATUS = "device_status"
-CACHE_DEVICE_CONFIG = "device_config"
 CACHE_DEVICE_INFO = "device_info"
 CACHE_DEVICE_DETAILS = "device_details"
 CACHE_DEVICE_ALARMS = "device_alarms"

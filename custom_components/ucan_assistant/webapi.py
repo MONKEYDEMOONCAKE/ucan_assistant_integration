@@ -11,7 +11,6 @@ from .const import (
     CACHE_CURRENT_DEVICE,
     CACHE_DEVICE_LIST,
     CACHE_DEVICE_STATUS,
-    CACHE_DEVICE_CONFIG,
     CACHE_DEVICE_DETAILS,
     CACHE_DEVICE_INFO,
     CACHE_DEVICE_ALARMS,
@@ -34,11 +33,6 @@ async def register_views(hass: HomeAssistant) -> None:
     if view.name not in app.router.named_resources():
         app.router.add_get(view.url, view.get, name=view.name)
         app.router.add_post(view.url, view.post, name=view.name)
-
-    # 注册设备配置视图
-    view = DeviceCfgView()
-    if view.name not in app.router.named_resources():
-        app.router.add_get(view.url, view.get, name=view.name)
 
     # 注册设备信息视图
     view = DeviceInfoView()
@@ -114,7 +108,6 @@ class DeviceStatusView(HomeAssistantView):
 
         # 清空原先设备缓存
         hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_STATUS] = {}
-        hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_CONFIG] = {}
         hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_INFO] = {}
         hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_DETAILS] = {}
         hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_ALARMS] = {}
@@ -143,35 +136,6 @@ class DeviceStatusView(HomeAssistantView):
 
         # 返回格式化数据
         return web.json_response({"status": data, "success": True})
-
-
-class DeviceCfgView(HomeAssistantView):
-    """自定义API视图."""
-
-    url = WEB_API_BASE_URL.rstrip("/") + "/device_config"
-    name = WEB_API_BASE_NAME.rstrip(":") + ":device_config"
-    requires_auth = True  # 要求HA认证
-
-    async def get(self, request):
-        """获取设备配置."""
-        hass = request.app["hass"]
-
-        # 检查缓存是否存在
-        if DOMAIN not in hass.data:
-            return web.json_response(
-                {"error": "集成未初始化", "config": {}, "success": False}, status=503
-            )
-
-        if DATA_CACHE not in hass.data[DOMAIN]:
-            return web.json_response(
-                {"error": "缓存未初始化", "config": {}, "success": False}, status=503
-            )
-
-        # 从缓存获取数据
-        data = hass.data[DOMAIN][DATA_CACHE].get(CACHE_DEVICE_CONFIG, {})
-
-        # 返回格式化数据
-        return web.json_response({"config": data, "success": True})
 
 
 class DeviceInfoView(HomeAssistantView):

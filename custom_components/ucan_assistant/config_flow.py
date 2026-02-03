@@ -57,7 +57,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             raise InvalidAuth from err
         raise CannotConnect from err
     except Exception as err:
-        _LOGGER.exception("连接失败")
+        _LOGGER.exception("connect to ucan server failed")
         raise CannotConnect from err
 
 
