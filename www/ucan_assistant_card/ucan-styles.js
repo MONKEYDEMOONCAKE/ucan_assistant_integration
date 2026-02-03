@@ -605,4 +605,21 @@ export const UcanStyles = `
     }
 
 
+    .ucan-container {
+        max-width: 50%;          /* 占据 1/2 宽度 */
+        margin: 0 auto;          /* 水平居中 */
+        padding: 16px;
+        background: var(--card-background-color, #fff);
+        border-radius: var(--ha-card-border-radius, 12px);
+    }
+
+    /* 移动端适配：小屏幕时占满宽度 */
+    @media (max-width: 768px) {
+        .ucan-container {
+        max-width: 100%;
+        margin: 0;
+        }
+    }
+
+
 `;

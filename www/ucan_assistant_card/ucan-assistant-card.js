@@ -456,8 +456,10 @@ class UcanAssistantCard extends HTMLElement {
 		// 渲染完整DOM
 		shadow.innerHTML = `
 			<style>${UcanStyles}</style>
-			${headerHtml}
-			${contentHtml}
+			<div class="ucan-container">
+				${headerHtml}
+				${contentHtml}
+			</div>
 		`;
 
 		if (this._pageState.type === 1 && this._curvePage !== 'main') {
