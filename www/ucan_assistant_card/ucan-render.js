@@ -207,24 +207,36 @@ export const UcanRender = {
 
                 <div class="power-list">
                     <div class="power-item">
-                        <div class="power-label">${translations.grid_power}</div>
-                        <div class="power-value ${UcanUtils.getPowerClass(powerData.grid)}">${powerData.grid}W</div>
-                        <button class="power-button">></button>
+                        <div class="power-label">${translations.grid_energy}:</div>
+                        <div class="power-value">
+                            ${powerData.usage_grid_today}Wh/${powerData.usage_grid_total}Wh
+                            <button class="power-button">></button>
+                        </div>
+
                     </div>
                     <div class="power-item">
-                        <div class="power-label">${translations.load_power}</div>
-                        <div class="power-value ${UcanUtils.getPowerClass(powerData.load)}">${powerData.load}W</div>
-                        <button class="power-button">></button>
+                        <div class="power-label">${translations.load_energy}:</div>
+                        <div class="power-value">
+                            ${powerData.usage_load_today}Wh/${powerData.usage_load_total}Wh
+                            <button class="power-button">></button>
+                        </div>
+
                     </div>
                     <div class="power-item">
-                        <div class="power-label">${translations.solar_power}</div>
-                        <div class="power-value ${UcanUtils.getPowerClass(powerData.solar)}">${powerData.solar}W</div>
-                        <button class="power-button">></button>
+                        <div class="power-label">${translations.solar_energy}:</div>
+                        <div class="power-value">
+                            ${powerData.usage_solar_today}Wh/${powerData.usage_solar_total}Wh
+                            <button class="power-button">></button>
+                        </div>
+
                     </div>
                     <div class="power-item">
-                        <div class="power-label">${translations.battery_power}</div>
-                        <div class="power-value ${UcanUtils.getPowerClass(powerData.battery)}">${powerData.battery}W</div>
-                        <button class="power-button">></button>
+                        <div class="power-label">${translations.battery_energy}:</div>
+                        <div class="power-value">
+                            ${powerData.usage_battery_today}Wh/${powerData.usage_battery_total}Wh
+                            <button class="power-button">></button>
+                        </div>
+
                     </div>
                 </div>
             </div>

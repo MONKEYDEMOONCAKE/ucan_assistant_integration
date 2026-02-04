@@ -64,7 +64,7 @@ async def async_setup_entry(
     for device in device_list:
         device_id = device.get("device_id")
         device_name = device.get("device_sn")
-        invmodel = device.get("inverter_model")
+        invmodel = await get_inv_model(device.get("inverter_model"))
 
         # 跳过无设备ID的无效设备
         if not device_id:
@@ -90,6 +90,33 @@ async def async_setup_entry(
 
     # 批量添加所有传感器实体
     async_add_entities(all_entities)
+
+
+async def get_inv_model(inv_model: str) -> str:
+    # 逆变器型号映射
+    inverter_models = {
+        "tq": "uhc",
+        "mr": "uhome",
+        "sk": "ufox",
+        "uhc-lv": "uhc-lv",
+        "uhc-hv": "uhc-hv",
+        "uhc-3-lv": "uhc-3-lv",
+        "uhc-3-hv": "uhc-3-hv",
+        "uhome-lv": "uhome-lv",
+        "uhome-hv": "uhome-hv",
+        "uhome-3-lv": "uhome-3-lv",
+        "uhome-3-hv": "uhome-3-hv",
+        "upc": "upc",
+        "ufox-x2": "ufox-x2",
+        "ufox-x3": "ufox-x3",
+        "monet": "monet",
+        "eboxmini": "eboxmini",
+        "usgr": "upc-hbk",
+        "upc-hb": "upc-hb",
+        "usj": "uhc-i&c-u2",
+        "bdc": "bdc",
+    }
+    return inverter_models.get(inv_model, inv_model)
 
 
 # 设备数据协调器（按设备ID区分）

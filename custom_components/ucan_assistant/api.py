@@ -23,6 +23,7 @@ from .const import (
     API_DEVICE_INFO,
     API_DEVICE_DETAILS,
     API_DEVICE_ALARMS,
+    API_DEVICE_POWER_DATA,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -333,6 +334,52 @@ class UcanServerApiClient:
         except Exception as err:
             _LOGGER.error("获取设备告警信息异常: %s", err)
             raise ServerDataError(f"获取设备告警信息异常: {err}") from err
+
+    async def async_get_power_data(
+        self, device_id: str, start_time: int, end_time: int
+    ) -> dict[str, Any]:
+        """获取设备功率数据."""
+        if not self._token:
+            _LOGGER.error("尝试获取设备功率数据时未认证")
+            raise AuthenticationError("未认证，请先登录")
+
+        url = f"{self._host}{API_DEVICE_POWER_DATA}"
+        payload = {
+            "device_id": device_id,
+            "start_time": start_time,  # 数据的开始时间，秒 零时区
+            "end_time": end_time,  # 数据的结束时间，秒 零时区
+            "date_type": "day",
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self._token}",
+        }
+
+        try:
+            async with async_timeout.timeout(10):
+                response = await self._session.post(url, json=payload, headers=headers)
+
+                if response.status != 200:
+                    raise AuthenticationError(f"HTTP err: {response.status}")  # noqa: TRY301
+
+                response_text = await response.text()
+                result = json.loads(response_text)
+                if (
+                    result.get("error_code") != ERROR_CODE_SUCCESS_STR
+                    and result.get("error_code") != ERROR_CODE_SUCCESS
+                ):
+                    raise ServerDataError(
+                        f"获取设备功率数据失败: {result.get('msg', 'unknown err')}"
+                    )  # noqa: TRY301
+
+                return result.get("data", {})
+
+        except asyncio.TimeoutError as err:  # noqa: UP041
+            _LOGGER.error("获取功率数据超时: %s", err)
+            raise ServerDataError("获取功率数据超时") from err
+        except Exception as err:
+            _LOGGER.error("获取功率数据异常: %s", err)
+            raise ServerDataError(f"获取功率数据异常: {err}") from err
 
     @property
     def is_authenticated(self) -> bool:

@@ -4,6 +4,7 @@ import json
 import logging
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from .const import (
     DOMAIN,
@@ -14,6 +15,7 @@ from .const import (
     CACHE_DEVICE_DETAILS,
     CACHE_DEVICE_INFO,
     CACHE_DEVICE_ALARMS,
+    CACHE_DEVICE_POWER_DATA,
     WEB_API_BASE_NAME,
     WEB_API_BASE_URL,
 )
@@ -48,6 +50,11 @@ async def register_views(hass: HomeAssistant) -> None:
     view = DeviceAlarmsView()
     if view.name not in app.router.named_resources():
         app.router.add_get(view.url, view.get, name=view.name)
+
+    # 注册设备功率数据视图
+    view = DevicePowerView()
+    if view.name not in app.router.named_resources():
+        app.router.add_get(view.url, view.post, name=view.name)
 
 
 class DeviceListView(HomeAssistantView):
@@ -104,6 +111,8 @@ class DeviceStatusView(HomeAssistantView):
         hass.data[DOMAIN][DATA_CACHE][CACHE_CURRENT_DEVICE] = {
             "device_sn": device_sn,
             "device_id": device_id,
+            "start_time": None,
+            "end_time": None,
         }
 
         # 清空原先设备缓存
@@ -223,6 +232,55 @@ class DeviceAlarmsView(HomeAssistantView):
 
         # 返回格式化数据
         return web.json_response({"alarms": data, "success": True})
+
+
+class DevicePowerView(HomeAssistantView):
+    """自定义API视图."""
+
+    url = WEB_API_BASE_URL.rstrip("/") + "/device_power"
+    name = WEB_API_BASE_NAME.rstrip(":") + ":device_power"
+    requires_auth = True  # 要求HA认证
+
+    async def post(self, request, entry: ConfigEntry):
+        """获取当前时间段."""
+        hass = request.app["hass"]
+        # 解析请求体
+        _LOGGER.debug("请求数据: %s", await request.json())
+        data = await request.json()
+        start_time = data.get("start_time")
+        end_time = data.get("end_time")
+        device_id = data.get("device_id")
+        _LOGGER.debug(
+            "设置当前时间段: start_time=%d, end_time=%d", start_time, end_time
+        )
+
+        if not start_time or not end_time or not device_id:
+            return web.json_response(
+                {"success": False, "message": "start_time 或 end_time 必须提供"},
+                status=400,
+            )
+        api = hass.data[DOMAIN][entry.entry_id]["api"]
+        try:
+            power_data = await api.async_get_power_data(device_id, start_time, end_time)
+        except Exception as e:
+            _LOGGER.error("获取电力数据失败: %s", e, exc_info=True)
+            return web.json_response(
+                {
+                    "success": False,
+                    "message": "获取数据失败，请稍后再试",
+                    "code": "API_ERROR",
+                    "error": str(e),
+                },
+                status=500,
+            )
+
+        # 返回成功响应
+        return web.json_response(
+            {
+                "success": True,
+                "data": power_data,
+            }
+        )
 
 
 # 注册详情API（需要在__init__.py中补充）

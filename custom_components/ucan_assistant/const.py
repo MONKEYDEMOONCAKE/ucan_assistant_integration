@@ -32,6 +32,7 @@ API_DEVICE_CONFIG = "/device/config"
 API_DEVICE_INFO = "/device/info"
 API_DEVICE_DETAILS = "/device/pcs/detail"
 API_DEVICE_ALARMS = "/report/event2"
+API_DEVICE_POWER_DATA = "/report/usage2"
 
 # 成功码
 ERROR_CODE_SUCCESS_STR = "2000"
@@ -45,6 +46,7 @@ CACHE_DEVICE_STATUS = "device_status"
 CACHE_DEVICE_INFO = "device_info"
 CACHE_DEVICE_DETAILS = "device_details"
 CACHE_DEVICE_ALARMS = "device_alarms"
+CACHE_DEVICE_POWER_DATA = "device_power_data"
 
 WEB_API_BASE_URL = "/api/ucan_assistant"
 WEB_API_BASE_NAME = "api:ucan_assistant"

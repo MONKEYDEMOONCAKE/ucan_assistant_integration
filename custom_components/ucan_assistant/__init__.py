@@ -24,6 +24,7 @@ from .const import (
     CACHE_DEVICE_INFO,
     CACHE_DEVICE_DETAILS,
     CACHE_DEVICE_ALARMS,
+    CACHE_DEVICE_POWER_DATA,
     DEFAULT_SCAN_INTERVAL,
     DATA_CACHE,
     DATA_UPDATE_TASK,
@@ -80,7 +81,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             frontend_url_path="ucan-panel",  # 访问路径 /ucan-panel
             config_panel_domain="ucan_assistant",  # 关联的集成域
             module_url="/local/community/ucan_assistant_card/ucan-assistant-card.js",  # 指向你注册的 JS 文件
-            sidebar_title="UCAN_1",  # 侧边栏标题
+            sidebar_title="UCAN",  # 侧边栏标题
             sidebar_icon="mdi:robot",  # 侧边栏图标
             embed_iframe=False,  # 直接嵌入，不使用 iframe
             require_admin=False,

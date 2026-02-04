@@ -390,18 +390,18 @@ export const UcanStyles = `
     }
 
     .power-item {
-        display: flex;      //元素横向排列
         justify-content: space-between;
         align-items: center;
         padding: 14px 16px;
         background: var(--secondary-background-color);
         border-radius: 6px;
+        color: var(--secondary-text-color);
     }
 
     .power-label {
         font-size: 14px;
         font-weight: 500;
-        color: var(--primary-text-color);
+
     }
 
     .power-value {
@@ -409,7 +409,7 @@ export const UcanStyles = `
         font-size: 18px;
         font-weight: 600;
         margin-left: auto;
-        text-align: right;
+        text-align: left;
     }
 
     .power-positive {
