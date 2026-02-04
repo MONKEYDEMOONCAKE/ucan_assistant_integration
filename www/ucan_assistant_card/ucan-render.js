@@ -209,7 +209,7 @@ export const UcanRender = {
                     <div class="power-item">
                         <div class="power-label">${translations.grid_energy}:</div>
                         <div class="power-value">
-                            ${powerData.usage_grid_today}Wh/${powerData.usage_grid_total}Wh
+                            ${powerData.usage_grid_today}/${powerData.usage_grid_total}kWh
                             <button class="power-button">></button>
                         </div>
 
@@ -217,7 +217,7 @@ export const UcanRender = {
                     <div class="power-item">
                         <div class="power-label">${translations.load_energy}:</div>
                         <div class="power-value">
-                            ${powerData.usage_load_today}Wh/${powerData.usage_load_total}Wh
+                            ${powerData.usage_load_today}/${powerData.usage_load_total}kWh
                             <button class="power-button">></button>
                         </div>
 
@@ -225,7 +225,7 @@ export const UcanRender = {
                     <div class="power-item">
                         <div class="power-label">${translations.solar_energy}:</div>
                         <div class="power-value">
-                            ${powerData.usage_solar_today}Wh/${powerData.usage_solar_total}Wh
+                            ${powerData.usage_solar_today}/${powerData.usage_solar_total}kWh
                             <button class="power-button">></button>
                         </div>
 
@@ -233,7 +233,7 @@ export const UcanRender = {
                     <div class="power-item">
                         <div class="power-label">${translations.battery_energy}:</div>
                         <div class="power-value">
-                            ${powerData.usage_battery_today}Wh/${powerData.usage_battery_total}Wh
+                            ${powerData.usage_battery_today}/${powerData.usage_battery_total}kWh
                             <button class="power-button">></button>
                         </div>
 

@@ -62,14 +62,14 @@ export class UcanApi {
                 load: data.status.load_power || 0,
                 solar: data.status.solar_power || 0,
                 battery: data.status.battery_power || 0,
-                usage_solar_today: data.status.usage_solar_today || 0,
-                usage_solar_total: data.status.usage_solar_total || 0,
-                usage_battery_today: data.status.usage_battery_discharge_today || 0,
-                usage_battery_total: data.status.usage_battery_discharge_total || 0,
-                usage_grid_today: data.status.usage_grid_today || 0,
-                usage_grid_total: data.status.usage_grid_total || 0,
-                usage_load_today: data.status.usage_load_today || 0,
-                usage_load_total: data.status.usage_load_total || 0,
+                usage_solar_today: data.status.usage_solar_today / 1000 || 0,
+                usage_solar_total: data.status.usage_solar_total / 1000 || 0,
+                usage_battery_today: data.status.usage_battery_discharge_today / 1000 || 0,
+                usage_battery_total: data.status.usage_battery_discharge_total / 1000 || 0,
+                usage_grid_today: data.status.usage_grid_today / 1000 || 0,
+                usage_grid_total: data.status.usage_grid_total / 1000 || 0,
+                usage_load_today: data.status.usage_load_today / 1000 || 0,
+                usage_load_total: data.status.usage_load_total / 1000 || 0,
             };
         } catch (error) {
             console.error('获取功率数据失败:', error);
