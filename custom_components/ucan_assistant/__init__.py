@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 import asyncio
 from aiohttp import web
+from datetime import datetime
+
 from homeassistant.config_entries import ConfigEntry
 
 from homeassistant.const import Platform
@@ -34,7 +36,7 @@ from .webapi import register_views
 
 # TODO List the platforms that you want to support.
 # For your initial PR, limit it to 1 platform.
-_PLATFORMS: list[Platform] = [Platform.SENSOR]
+_PLATFORMS: list[Platform] = []
 
 # TODO Create ConfigEntry type alias with API object
 # TODO Rename type alias and update all entry annotations
@@ -60,9 +62,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][DATA_CACHE] = {}
     # 存储API实例
     hass.data[DOMAIN][entry.entry_id] = {"api": api}
-
-    # 启动传感器平台
-    await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
 
     # 启动定时更新任务
     update_task = asyncio.create_task(async_update_data(hass, entry))
@@ -124,28 +123,32 @@ async def async_update_data(hass: HomeAssistant, entry: ConfigEntry):
     """定时拉取服务器数据并更新缓存."""
     api = hass.data[DOMAIN][entry.entry_id]["api"]
 
-    if not hasattr(async_update_data, "list_update_counter"):
-        async_update_data.list_update_counter = 0
+    if not hasattr(async_update_data, "update_counter"):
+        async_update_data.update_counter = 0
 
     while True:
         try:
-            async_update_data.list_update_counter += 1
-            if async_update_data.list_update_counter % 2 == 0:
-                # 更新设备列表
-                hass.data[DOMAIN][DATA_CACHE][
-                    CACHE_DEVICE_LIST
-                ] = await api.async_get_device_list()
-                _LOGGER.debug(
-                    "设备列表已更新，包含%d个设备",
-                    len(hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_LIST]),
-                )
-
             current_device = hass.data[DOMAIN][DATA_CACHE].get(CACHE_CURRENT_DEVICE, {})
             device_id = current_device.get("device_id")  # 是否选中设备
+
+            if not device_id:
+                if (
+                    async_update_data.update_counter % 5 == 0
+                    or not hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_LIST]
+                ):
+                    # 更新设备列表
+                    hass.data[DOMAIN][DATA_CACHE][
+                        CACHE_DEVICE_LIST
+                    ] = await api.async_get_device_list()
+                    _LOGGER.debug(
+                        "设备列表已更新，包含%d个设备",
+                        len(hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_LIST]),
+                    )
+
             if device_id:
                 if (
-                    hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_STATUS] == {}
-                    or async_update_data.list_update_counter % 2 == 0
+                    not hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_STATUS]
+                    or async_update_data.update_counter % 5 == 0
                 ):
                     # 更新设备数据
                     hass.data[DOMAIN][DATA_CACHE][
@@ -155,8 +158,8 @@ async def async_update_data(hass: HomeAssistant, entry: ConfigEntry):
                         CACHE_DEVICE_INFO
                     ] = await api.async_get_device_info(device_id)
                     result = await api.async_get_device_config(device_id)
-                    hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_INFO]["timezone"] = (
-                        result
+                    hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_INFO].update(
+                        {"timezone": result}
                     )
                     hass.data[DOMAIN][DATA_CACHE][
                         CACHE_DEVICE_DETAILS
@@ -164,6 +167,29 @@ async def async_update_data(hass: HomeAssistant, entry: ConfigEntry):
                     hass.data[DOMAIN][DATA_CACHE][
                         CACHE_DEVICE_ALARMS
                     ] = await api.async_get_device_alarms(device_id)
+
+                start_time = current_device.get("start_time") or 0
+                end_time = current_device.get("end_time") or 0
+                data_type = current_device.get("data_type")
+
+                _LOGGER.debug(
+                    "时区偏移：%d, 开始：%ld, 结束：%ld, data_type: %s",
+                    result,
+                    start_time,
+                    end_time,
+                    data_type,
+                )
+                if (
+                    start_time
+                    and end_time
+                    and not hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_POWER_DATA]
+                ):
+                    hass.data[DOMAIN][DATA_CACHE][
+                        CACHE_DEVICE_POWER_DATA
+                    ] = await api.async_get_power_data(
+                        device_id, start_time, end_time, data_type
+                    )
+            async_update_data.update_counter += 1
 
         except AuthenticationError:
             # 触发重新登录配置流

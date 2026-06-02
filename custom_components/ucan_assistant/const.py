@@ -20,7 +20,7 @@ ROLES = {
     "MEMBER": "成员",
 }
 
-DEFAULT_SCAN_INTERVAL = 5  # 秒  API
+DEFAULT_SCAN_INTERVAL = 2  # 秒  API
 SENSOR_SCAN_INTERVAL = 60
 
 # API endpoints

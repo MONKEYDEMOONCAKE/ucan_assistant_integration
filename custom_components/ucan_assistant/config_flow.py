@@ -64,7 +64,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 class UcanAssistantDataConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for ucan server data."""
 
-    VERSION = 1
+    VERSION = 1  # 表单结构修改时增加 否则保持不变
     reauth_entry: config_entries.ConfigEntry | None = None
 
     async def async_step_user(
@@ -82,7 +82,7 @@ class UcanAssistantDataConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except Exception:
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
-            else:
+            else:  # try 块无异常时触发
                 return self.async_create_entry(title=info["title"], data=info)
 
         return self.async_show_form(

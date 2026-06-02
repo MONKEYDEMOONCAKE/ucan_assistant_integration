@@ -191,7 +191,6 @@ class UcanServerApiClient:
 
                 response_text = await response.text()
                 result = json.loads(response_text)
-                _LOGGER.debug("result: %s", result)
                 if (
                     result.get("error_code") != ERROR_CODE_SUCCESS_STR
                     and result.get("error_code") != ERROR_CODE_SUCCESS
@@ -336,7 +335,7 @@ class UcanServerApiClient:
             raise ServerDataError(f"获取设备告警信息异常: {err}") from err
 
     async def async_get_power_data(
-        self, device_id: str, start_time: int, end_time: int
+        self, device_id: str, start_time: int, end_time: int, data_type: str = "day"
     ) -> dict[str, Any]:
         """获取设备功率数据."""
         if not self._token:
@@ -348,7 +347,7 @@ class UcanServerApiClient:
             "device_id": device_id,
             "start_time": start_time,  # 数据的开始时间，秒 零时区
             "end_time": end_time,  # 数据的结束时间，秒 零时区
-            "date_type": "day",
+            "date_type": data_type,
         }
         headers = {
             "Content-Type": "application/json",

@@ -54,7 +54,8 @@ async def register_views(hass: HomeAssistant) -> None:
     # 注册设备功率数据视图
     view = DevicePowerView()
     if view.name not in app.router.named_resources():
-        app.router.add_get(view.url, view.post, name=view.name)
+        app.router.add_get(view.url, view.get, name=view.name)
+        app.router.add_post(view.url, view.post, name=view.name)
 
 
 class DeviceListView(HomeAssistantView):
@@ -108,18 +109,19 @@ class DeviceStatusView(HomeAssistantView):
                 {"success": False, "message": "device_sn 或 device_id 必须提供"},
                 status=400,
             )
-        hass.data[DOMAIN][DATA_CACHE][CACHE_CURRENT_DEVICE] = {
-            "device_sn": device_sn,
-            "device_id": device_id,
-            "start_time": None,
-            "end_time": None,
-        }
 
         # 清空原先设备缓存
         hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_STATUS] = {}
         hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_INFO] = {}
         hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_DETAILS] = {}
         hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_ALARMS] = {}
+        hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_POWER_DATA] = {}
+        hass.data[DOMAIN][DATA_CACHE][CACHE_CURRENT_DEVICE] = {}
+
+        hass.data[DOMAIN][DATA_CACHE][CACHE_CURRENT_DEVICE] = {
+            "device_sn": device_sn,
+            "device_id": device_id,
+        }
 
         return web.json_response(
             {"success": True, "data": {"device_sn": device_sn, "device_id": device_id}}
@@ -241,46 +243,66 @@ class DevicePowerView(HomeAssistantView):
     name = WEB_API_BASE_NAME.rstrip(":") + ":device_power"
     requires_auth = True  # 要求HA认证
 
-    async def post(self, request, entry: ConfigEntry):
+    async def post(self, request):
         """获取当前时间段."""
         hass = request.app["hass"]
+
         # 解析请求体
         _LOGGER.debug("请求数据: %s", await request.json())
         data = await request.json()
         start_time = data.get("start_time")
         end_time = data.get("end_time")
         device_id = data.get("device_id")
+        data_type = data.get("data_type", "")  # 默认绘制日功率曲线
         _LOGGER.debug(
             "设置当前时间段: start_time=%d, end_time=%d", start_time, end_time
         )
 
         if not start_time or not end_time or not device_id:
             return web.json_response(
-                {"success": False, "message": "start_time 或 end_time 必须提供"},
-                status=400,
-            )
-        api = hass.data[DOMAIN][entry.entry_id]["api"]
-        try:
-            power_data = await api.async_get_power_data(device_id, start_time, end_time)
-        except Exception as e:
-            _LOGGER.error("获取电力数据失败: %s", e, exc_info=True)
-            return web.json_response(
                 {
                     "success": False,
-                    "message": "获取数据失败，请稍后再试",
-                    "code": "API_ERROR",
-                    "error": str(e),
+                    "message": "start_time and end_time must be provided",
                 },
-                status=500,
+                status=400,
             )
 
-        # 返回成功响应
+        hass.data[DOMAIN][DATA_CACHE][CACHE_CURRENT_DEVICE].update(
+            {"start_time": start_time, "end_time": end_time, "data_type": data_type}
+        )
+        hass.data[DOMAIN][DATA_CACHE][CACHE_DEVICE_POWER_DATA] = {}
+
         return web.json_response(
             {
                 "success": True,
-                "data": power_data,
+                "data": {
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "data_type": data_type,
+                },
             }
         )
+
+    async def get(self, request):
+        """获取设备功率统计信息."""
+        hass = request.app["hass"]
+
+        # 检查缓存是否存在
+        if DOMAIN not in hass.data:
+            return web.json_response(
+                {"error": "集成未初始化", "power": {}, "success": False}, status=503
+            )
+
+        if DATA_CACHE not in hass.data[DOMAIN]:
+            return web.json_response(
+                {"error": "缓存未初始化", "power": {}, "success": False}, status=503
+            )
+
+        # 从缓存获取数据
+        data = hass.data[DOMAIN][DATA_CACHE].get(CACHE_DEVICE_POWER_DATA, {})
+        _LOGGER.debug("前端拿取统计数据：%s", data)
+        # 返回格式化数据
+        return web.json_response({"power": data, "success": True})
 
 
 # 注册详情API（需要在__init__.py中补充）

@@ -15,36 +15,61 @@ const getScriptPath = () => {
 // 定义基础路径
 const BASE_PATH = getScriptPath();
 
+
+
+const pageType_st = Object.freeze({
+	LIST: 0,
+	MAIN: 1,
+	DETAILS: 2,
+	ALARMS: 3,
+	INFO: 4
+});
+
+const pageType_nd = Object.freeze({
+	FLOW: 'flow',
+	CHART: 'chart',
+	BAT: 'bat',
+	GRID: 'grid',
+	SOLAR: 'mppt',
+	LOAD: 'load'
+});
+
+
+const ChartType = Object.freeze({
+	DAY: 'day',
+	MONTH: 'month',
+	YEAR: 'year',
+	TOTAL: 'total',
+});
+
 // 定义核心卡片类
 class UcanAssistantCard extends HTMLElement {
 	constructor() {
 		super();
 		this.attachShadow({ mode: 'open' });
 
-
-
 		// 状态管理
 		this._hass = null;
-		this._config = {};
-		this._api = null; // API实例
-		this._devices = [];
+		this._config = {};	//	卡片必备
+		this._api = null; // Ucan API实例
 		this._loading = false;
 		this._error = null;
+		this._devices = [];	// 设备列表
+		this._change_flag = false;
 		this._currentDevice = null;
-		this._pollingInterval = null;
-		this._pageState = { type: 0, data: {} }; // 0=列表，1=详情，2=信息，3=报警, 4=设备信息
-		this._curvePage = 'main';
-		this._detailPage = 'bat';
+		this._pollingInterval = null;	// 周期执行的running函数，相当于c里的while（1）
+		this._pageState = { first_type: pageType_st.LIST, second_type: pageType_nd.FLOW, chart_type: ChartType.DAY, data: {} }; //分层管理页面，初始化后处于列表页
 		this._chartLoaded = false; // 标记Chart.js是否已加载
-		this._timezone = null;
-		this._timezone_effect = null; // 标记时区是否有效
 		this.currentChartDate = new Date();
 		this._i18n = {};	//存储翻译文本
 		this._inv_model_json = {};	//存储逆变器型号json
+		this._domInitialized = false;
 	}
 
 	connectedCallback() {
 		this.shadowRoot.innerHTML = `<h1>UCAN Assistant</h1>`;
+		this._initializeDOM();
+		this._change_flag = true;
 	}
 
 	// HA卡片必需：设置配置
@@ -66,7 +91,7 @@ class UcanAssistantCard extends HTMLElement {
 					//console.log("this._i18n:", this._i18n);
 					this._api = new UcanApi(hass);
 					this.loadChartJS();
-					this._loadDevices(); // 只有首次初始化时才加载设备
+					this._pollingInterval = this._api.startPolling(() => this._main_running(), 500, this._pollingInterval);		// 开启主周期任务
 				}
 			}).catch(err => {
 				console.error('Error loading inverter models, please refresh:', err);
@@ -138,11 +163,12 @@ class UcanAssistantCard extends HTMLElement {
 		});
 	}
 
+
 	// 加载设备列表
 	async _loadDevices() {
 		this._loading = true;
 		this._error = null;
-		console.log("fffff");
+		console.log("aaaaa");
 		this._render();
 
 		try {
@@ -151,31 +177,26 @@ class UcanAssistantCard extends HTMLElement {
 			this._error = error.message;
 		} finally {
 			this._loading = false;
-			console.log("eeeee");
+			console.log("bbbbb");
 			this._render();
 		}
 	}
 
-	// 选择设备并进入详情页
+	// 选择设备进入详情页
 	async _selectDevice(device) {
 		this._loading = true;
 		this._error = null;
-		console.log("ddddd");
-		this._render();
-
 		try {
 			await this._api.selectDevice(device); // 通知后端
 			this._currentDevice = device;
-			this._pageState.type = 1; // 切换到详情页
-
-			// 启动功率轮询
-			this._pollingInterval = this._api.startPolling(() => this._fetchPowerData(), 5000, this._pollingInterval);
+			this._pageState.first_type = pageType_st.MAIN; // 切换到主页
+			this._pageState.second_type = pageType_nd.FLOW;
+			this._change_flag = true;
 		} catch (error) {
 			this._error = error.message;
 		} finally {
 			this._loading = false;
 			console.log("ccccc");
-			this._render();
 		}
 	}
 
@@ -183,54 +204,69 @@ class UcanAssistantCard extends HTMLElement {
 	async _fetchPowerData() {
 		try {
 			this._pageState.data = await this._api.getDevicePower();
-			console.log("bbbbb");
-			this._render();
 		} catch (error) {
 			console.error('轮询功率数据失败:', error);
+		} finally {
+			console.log("eeeee");
+			this._render();
 		}
 	}
 
-	//获取功率历史数据
-	async _fetchAllPowerHistoryData(device, targetDate, deviceOffsetSecs) {
-		if(this._timezone == 0)
-			this._timezone = null;
-		const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-		let cnt = 0;
-    	const maxRetries = 3; // 设置最大重试次数
-		try {
-			while ((this._timezone == null || isNaN(this._timezone)) && cnt < maxRetries)
-			{
-				await this._fetchDevInfoData();
-				await delay(500);
-				cnt++;
-			}
+	//设置历史数据时间段
+	async _setHistoryTime(device, targetDate, chart_type) {
 
-			if (this._timezone == null || isNaN(this._timezone)) {
-				console.warn('警告：未能获取设备时区，已强制使用零时区 (UTC+0)，数据时间可能不准确，请检查设备连接状态。');
-				// 这里可以添加 UI 提示逻辑，例如：this._showToast('时区获取失败，使用默认值');
+		if (this._timezone == null) {
+			await this._fetchDevInfoData();
+			console.warn('警告：未能获取设备时区，已强制使用零时区 (UTC+0)，数据时间可能不准确，请检查设备连接状态。');
+			// 这里可以添加 UI 提示逻辑，例如：this._showToast('时区获取失败，使用默认值');
+			if (this._timezone == null) {
 				this._timezone = 0;
 				this._timezone_effect = 0;
 			}
-			else {
-				this._timezone_effect = 1;
-			}
 
-			this._pageState.data = await this._api.getAllPowerHistoryData(device, targetDate, deviceOffsetSecs);
-			console.log("aaaaa");
-			this._render();
-		} catch (error) {
-			console.error('获取功率历史数据失败:', error);
+		}
+		else {
+			this._timezone_effect = 1;
+		}
+
+		const result = await this._api.selectDataTimeRange(device, targetDate, this._timezone, chart_type);
+		if (!result) {
+			return false;
+		}
+		else {
+			return true;
 		}
 	}
 
+
+	//获取历史数据
+	async _fetchHistoryData(deviceOffsetSecs, chart_type) {
+		let result = null;
+		try {
+			result = await this._api.getHistoryData(deviceOffsetSecs, chart_type);
+			this._pageState.data = result.data;		// 处理后符合绘图的数据
+			console.log("filled:", result.filled);
+
+		} catch (error) {
+			console.error('获取功率历史数据失败:', error);
+		} finally {
+			console.log("kkkkk");
+			this._render();
+			return result.filled;
+		}
+	}
+
+
 	//获取详细数据并更新
 	async _fetchDetailData() {
+
 		try {
 			this._pageState.data = await this._api.getDetailsData();
-			console.log("99999");
-			this._render();
 		} catch (error) {
 			console.error('获取详细数据失败:', error);
+		} finally {
+			console.log("99999");
+			this._render();
 		}
 	}
 
@@ -238,10 +274,11 @@ class UcanAssistantCard extends HTMLElement {
 	async _fetchAlarmData() {
 		try {
 			this._pageState.data = await this._api.getAlarmData();
-			console.log("88888");
-			this._render();
 		} catch (error) {
 			console.error('获取告警数据失败:', error);
+		} finally {
+			console.log("99999");
+			this._render();
 		}
 	}
 
@@ -249,31 +286,30 @@ class UcanAssistantCard extends HTMLElement {
 	async _fetchDevInfoData() {
 		try {
 			this._pageState.data = await this._api.getDevInfoData();
-			this._timezone = this._pageState.data.timezone || null;
+			this._timezone = this._pageState.data.timezone;
 			console.log('timezone:', this._timezone);
-			console.log("77777");
 			this._render();
 		} catch (error) {
 			console.error('获取设备信息失败:', error);
+		} finally {
+			console.log("77777");
+			this._render();
 		}
 	}
 
 	// 返回列表页
 	_goBack() {
-		if (this._pageState.type == 1 && this._curvePage != 'main') {
-			this._curvePage = 'main';
-			this._pageState.data = {};
-			this._pollingInterval = this._api.startPolling(() => this._fetchPowerData(), 5000, this._pollingInterval);
+		if (this._pageState.first_type == pageType_st.MAIN && this._pageState.second_type == pageType_nd.CHART) {		//返回主页
+			this._pageState.second_type = pageType_nd.FLOW;
 		}
 		else {
-			this._pollingInterval = UcanUtils.clearPolling(this._pollingInterval);
-			this._pageState.type = 0;
+			this._pageState.first_type = pageType_st.LIST;
 			this._timezone = null;
 			this._timezone_effect = 0;
 			this._currentDevice = null;
 		}
+		this._change_flag = true;
 		console.log("66666");
-		this._render();
 	}
 
 	// 绑定交互事件（按钮/设备卡片点击）
@@ -285,28 +321,7 @@ class UcanAssistantCard extends HTMLElement {
 		shadow.querySelector('.back-btn')?.addEventListener('click', () => this._goBack());
 		// 刷新按钮
 		shadow.querySelector('.refresh-btn')?.addEventListener('click', () => {
-			switch (this._pageState.type) {
-				case 0:
-					this._loadDevices();
-					break;
-				case 1:
-					if(this._curvePage == 'main')
-						this._fetchPowerData();
-					else
-						this._fetchAllPowerHistoryData(this._currentDevice, this.currentChartDate, this._timezone);
-					break;
-				case 2:
-					this._fetchDetailData();
-					break;
-				case 3:
-					this._fetchAlarmData();
-					break;
-				case 4:
-					this._fetchDevInfoData();
-					break;
-				default:
-					break;
-			}
+			this._change_flag = true;
 		});
 		// 设备卡片点击
 		shadow.querySelectorAll('.device-card').forEach(card => {
@@ -320,151 +335,304 @@ class UcanAssistantCard extends HTMLElement {
 			const target = event.target;
 			if (target instanceof HTMLSelectElement) {
 				const map = {
-					main: { type: 1, data: {} },
-					info: { type: 2, data: {} },
-					alarm: { type: 3, data: {} },
-					devinfo: { type: 4, data: {} }
+					main: { first_type: pageType_st.MAIN, second_type: pageType_nd.FLOW, chart_type: ChartType.DAY, data: {} },
+					details: { first_type: pageType_st.DETAILS, second_type: pageType_nd.BAT, chart_type: ChartType.DAY, data: {} },
+					alarm: { first_type: pageType_st.ALARMS, second_type: pageType_nd.FLOW, chart_type: ChartType.DAY, data: {} },
+					devinfo: { first_type: pageType_st.INFO, second_type: pageType_nd.FLOW, chart_type: ChartType.DAY, data: {} }
 				};
-				this._pageState = map[target.value] || { type: 1, data: {} };	//默认主页
-				this._curvePage = 'main';
-				switch (this._pageState.type) {
-					case 1:
-						this._pollingInterval = this._api.startPolling(() => this._fetchPowerData(), 5000, this._pollingInterval);
-						break;
-					case 2:
-						this._pollingInterval = this._api.startPolling(() => this._fetchDetailData(), 5000, this._pollingInterval);
-						break;
-					case 3:
-						this._pollingInterval = this._api.startPolling(() => this._fetchAlarmData(), 5000, this._pollingInterval);
-						break;
-					case 4:
-						this._pollingInterval = this._api.startPolling(() => this._fetchDevInfoData(), 30000, this._pollingInterval);
-						break;
-					default:
-						this._pollingInterval = this._api.startPolling(() => this._fetchPowerData(), 5000, this._pollingInterval);
-				}
-				console.log("555551");
-				this._render();
+				this._pageState = map[target.value] || { first_type: pageType_st.MAIN, second_type: pageType_nd.FLOW, chart_type: ChartType.DAY, data: {} };	//默认主页
+				this._change_flag = true;
+				console.log("55555");
 			}
 		});
 
-		//功率曲线图
-		const powerButtons = shadow.querySelectorAll('.power-button');
-		powerButtons.forEach(button => {
-			button.addEventListener('click', () => {
-				this._curvePage = 'curve';
-				this._pollingInterval = UcanUtils.clearPolling(this._pollingInterval);
-				this._fetchAllPowerHistoryData(this._currentDevice, this.currentChartDate, this._timezone);
-			});
+		//统计数据日期切换
+		shadow.querySelector('.prev-date')?.addEventListener('click', async () => {
+
+			if (this._pageState.chart_type == ChartType.DAY) {
+				// 1. 获取当前图表日期，切换为前一天
+				const prevDate = new Date(this.currentChartDate);
+				prevDate.setDate(prevDate.getDate() - 1);
+
+				// 2. 更新当前日期跟踪属性
+				this.currentChartDate = prevDate;
+			}
+			else if (this._pageState.chart_type == ChartType.MONTH) {
+				// 1. 获取当前图表日期，切换为前一天
+				const prevDate = new Date(this.currentChartDate);
+				prevDate.setMonth(prevDate.getMonth() - 1);
+
+				// 2. 更新当前日期跟踪属性
+				this.currentChartDate = prevDate;
+			}
+			else if (this._pageState.chart_type == ChartType.YEAR) {
+				// 1. 获取当前图表日期，切换为前一天
+				const prevDate = new Date(this.currentChartDate);
+				prevDate.setFullYear(prevDate.getFullYear() - 1);
+
+				// 2. 更新当前日期跟踪属性
+				this.currentChartDate = prevDate;
+			}
+			this._pageState.data = {};
+			this._change_flag = true;
 
 		});
 
-		//日期切换
-		shadow.querySelector('.prev-date')?.addEventListener('click', () => {
-			// 1. 获取当前图表日期，切换为前一天
-			const prevDate = new Date(this.currentChartDate);
-			prevDate.setDate(prevDate.getDate() - 1);
+		shadow.querySelector('.next-date')?.addEventListener('click', async () => {
+			if (this._pageState.chart_type == ChartType.DAY) {
+				// 1. 获取当前图表日期，切换为前一天
+				const nextDate = new Date(this.currentChartDate);
+				nextDate.setDate(nextDate.getDate() + 1);
 
-			// 2. 更新当前日期跟踪属性
-			this.currentChartDate = prevDate;
+				// 2. 更新当前日期跟踪属性
+				this.currentChartDate = nextDate;
+			}
+			else if (this._pageState.chart_type == ChartType.MONTH) {
+				// 1. 获取当前图表日期，切换为前一天
+				const prevDate = new Date(this.currentChartDate);
+				prevDate.setMonth(prevDate.getMonth() + 1);
 
-			// 3. 重新拉取前一天的数据并更新图表（复用你的getPowerHistoryData方法）
-			this._fetchAllPowerHistoryData(this._currentDevice, this.currentChartDate, this._timezone);
+				// 2. 更新当前日期跟踪属性
+				this.currentChartDate = prevDate;
+			}
+			else if (this._pageState.chart_type == ChartType.YEAR) {
+				// 1. 获取当前图表日期，切换为前一天
+				const nextDate = new Date(this.currentChartDate);
+				nextDate.setFullYear(nextDate.getFullYear() + 1);
+
+				// 2. 更新当前日期跟踪属性
+				this.currentChartDate = nextDate;
+			}
+			this._pageState.data = {};
+			this._change_flag = true;
+
 		});
 
-		shadow.querySelector('.next-date')?.addEventListener('click', () => {
-			// 1. 获取当前图表日期，切换为后一天
-			const nextDate = new Date(this.currentChartDate);
-			nextDate.setDate(nextDate.getDate() + 1);
 
-			// 2. 更新当前日期跟踪属性
-			this.currentChartDate = nextDate;
-			// 3. 重新拉取前一天的数据并更新图表（复用你的getPowerHistoryData方法）
-			this._fetchAllPowerHistoryData(this._currentDevice, this.currentChartDate, this._timezone);
-		});
 
 		// 详细信息按钮
 		//battery
 		shadow.querySelector('.bat_btn')?.addEventListener('click', () => {
-			this._detailPage = 'bat';
-			console.log("44444");
-			this._render();
+			this._pageState.second_type = pageType_nd.BAT;
+			this._change_flag = true;
 		});
 		//mppt
 		shadow.querySelector('.mppt_btn')?.addEventListener('click', () => {
-			this._detailPage = 'mppt';
-			console.log("33333");
-			this._render();
+			this._pageState.second_type = pageType_nd.SOLAR;
+			this._change_flag = true;
 		});
 		//load
 		shadow.querySelector('.load_btn')?.addEventListener('click', () => {
-			this._detailPage = 'load';
-			console.log("222222");
-			this._render();
+			this._pageState.second_type = pageType_nd.LOAD;
+			this._change_flag = true;
 		});
 		//grid
 		shadow.querySelector('.grid_btn')?.addEventListener('click', () => {
-			this._detailPage = 'grid';
-			console.log("111111");
-			this._render();
+			this._pageState.second_type = pageType_nd.GRID;
+			this._change_flag = true;
+		});
+		//day
+		shadow.querySelector('.day_btn')?.addEventListener('click', () => {
+			this._pageState.chart_type = ChartType.DAY;
+			this.currentChartDate = new Date();
+			this._change_flag = true;
+		});
+		shadow.querySelector('.month_btn')?.addEventListener('click', () => {
+			this._pageState.chart_type = ChartType.MONTH;
+			this.currentChartDate = new Date();
+			this._change_flag = true;
+		});
+		shadow.querySelector('.year_btn')?.addEventListener('click', () => {
+			this._pageState.chart_type = ChartType.YEAR;
+			this.currentChartDate = new Date();
+			this._change_flag = true;
+		});
+		shadow.querySelector('.total_btn')?.addEventListener('click', () => {
+			this._pageState.chart_type = ChartType.TOTAL;
+			this.currentChartDate = new Date();
+			this._change_flag = true;
+		});
+
+		// 主页进入统计图表按钮
+		const powerButtons = shadow.querySelectorAll('.power-button');
+		powerButtons.forEach(button => {
+			button.addEventListener('click', () => {
+				this._pageState.second_type = pageType_nd.CHART;
+				this._pageState.chart_type = ChartType.DAY;
+				this._pageState.data = {};
+				this._change_flag = true;
+			});
+
 		});
 	}
 
+	//核心运行函数
+	async _main_running() {
+
+		if (this._main_running._counter === undefined) {
+			this._main_running._counter = 0;
+		}
+
+		// 新增两个静态变量渲染图表页
+		if (this._main_running._setReault === undefined) {
+			this._main_running._setReault = 0;
+		}
+		if (this._main_running._filled === undefined) {
+			this._main_running._filled = 1;
+		}
+
+		console.log("first:", this._pageState.first_type, "second:", this._pageState.second_type, "chart:", this._pageState.chart_type);
+		switch (this._pageState.first_type) {
+			case pageType_st.LIST:
+				if (this._change_flag || this._main_running._counter % 120 === 0) {
+					this._loadDevices();
+					this._change_flag = false;
+				}
+				break;
+			case pageType_st.MAIN:
+				if (this._pageState.second_type == pageType_nd.FLOW) {
+					if (this._change_flag || this._main_running._counter % 10 === 0) {
+						this._fetchPowerData();
+						this._change_flag = false;
+					}
+				}
+				else if (this._pageState.second_type == pageType_nd.CHART) {
+					if (this._change_flag) {
+						//1、设置数据起始结束时间
+						this._main_running._setReault = 0;
+						this._main_running._filled = 1;
+						this._main_running._setReault = await this._setHistoryTime(this._currentDevice, this.currentChartDate, this._pageState.chart_type);
+						if (this._main_running._setReault)
+							this._change_flag = false;
+
+					}
+					if (this._main_running._filled && this._main_running._counter % 2 === 0 && this._main_running._setReault == 1)
+						this._main_running._filled = await this._fetchHistoryData(this._timezone, this._pageState.chart_type);
+				}
+				break;
+			case pageType_st.DETAILS:
+				if (this._change_flag || this._main_running._counter % 10 === 0) {
+					this._fetchDetailData();
+					this._change_flag = false;
+				}
+				break;
+			case pageType_st.ALARMS:
+				if (this._change_flag || this._main_running._counter % 10 === 0) {
+					this._fetchAlarmData();
+					this._change_flag = false;
+				}
+				break;
+			case pageType_st.INFO:
+				if (this._change_flag || this._main_running._counter % 120 === 0) {
+					this._fetchDevInfoData();
+					this._change_flag = false;
+				}
+				break;
+
+		}
+		this._main_running._counter++;
+	}
+
+
+	_initializeDOM() {
+		const shadow = this.shadowRoot;
+		shadow.innerHTML = `
+			<style>${UcanStyles}</style>
+			<div class="ucan-container">
+				<div id="header-slot"></div>
+				<div id="content-slot"></div>
+			</div>
+		`;
+		// 标记已初始化
+		this._domInitialized = true;
+	}
 	// 核心渲染方法
 	_render() {
 		const shadow = this.shadowRoot;
 		if (!shadow) return;
 
+
+		 // 1. 如果 DOM 未初始化，先初始化
+		if (!this._domInitialized) {
+			this._initializeDOM();
+		}
+
+		// 2. 获取插槽
+		const headerSlot = shadow.getElementById('header-slot');
+		const contentSlot = shadow.getElementById('content-slot');
+		if (!headerSlot || !contentSlot) return;
+
 		// 拼接头部和内容
 		let headerHtml = '';
 		let contentHtml = '';
-		console.log('当前页面状态:', this._pageState, this._curvePage);
+		console.log('当前页面状态:', this._pageState.first_type, this._pageState.second_type, this._pageState.chart_type);
 
-		switch (this._pageState.type) {
-			case 0: // 列表页
+		switch (this._pageState.first_type) {
+			case pageType_st.LIST: // 列表页
 				headerHtml = UcanRender.renderListHeader(this._i18n);
 				contentHtml = UcanRender.renderDeviceList(this._i18n, this._loading, this._error, this._devices, this._inv_model_json);
 				break;
-			case 1: // 主页
-				headerHtml = UcanRender.renderMainPageHeader(this._i18n, this._pageState.type);
-				if (this._curvePage == 'main') {
+			case pageType_st.MAIN: //主页
+				headerHtml = UcanRender.renderMainPageHeader(this._i18n, this._pageState.first_type);
+				if (this._pageState.second_type == pageType_nd.FLOW)
 					contentHtml = UcanRender.renderMainPage(this._i18n, this._loading, this._error, this._currentDevice, this._pageState.data);
-				}
-				else {
-					contentHtml = UcanRender.renderCurve(this._i18n, this._loading, this._error, this._currentDevice, this._pageState.data, this.currentChartDate, this._timezone_effect);
-				}
+				else if (this._pageState.second_type == pageType_nd.CHART)
+					contentHtml = UcanRender.renderCurve(this._i18n, this._loading, this._error, this._currentDevice, this._pageState.data, this.currentChartDate, this._pageState.chart_type);
+
 				break;
-			case 2: // 详情页
-				headerHtml = UcanRender.renderMainPageHeader(this._i18n, this._pageState.type);
-				contentHtml = UcanRender.renderDetailPage(this._i18n, this._loading, this._error, this._currentDevice, this._pageState.data, this._detailPage);
+			case pageType_st.DETAILS: // 详情页
+				headerHtml = UcanRender.renderMainPageHeader(this._i18n, this._pageState.first_type);
+				contentHtml = UcanRender.renderDetailPage(this._i18n, this._loading, this._error, this._currentDevice, this._pageState.data, this._pageState.second_type);
 				break;
-			case 3: // 告警详情页
-				headerHtml = UcanRender.renderMainPageHeader(this._i18n, this._pageState.type);
+			case pageType_st.ALARMS: // 告警详情页
+				headerHtml = UcanRender.renderMainPageHeader(this._i18n, this._pageState.first_type);
 				contentHtml = UcanRender.renderDevAlarmsPage(this._i18n, this._loading, this._error, this._currentDevice, this._pageState.data);
 				break;
-			case 4: // 设备信息页
-				headerHtml = UcanRender.renderMainPageHeader(this._i18n, this._pageState.type);
+			case pageType_st.INFO: // 设备信息页
+				headerHtml = UcanRender.renderMainPageHeader(this._i18n, this._pageState.first_type);
 				contentHtml = UcanRender.renderDevInfoPage(this._i18n, this._loading, this._error, this._currentDevice, this._pageState.data);
 				break;
+
 			default:
 				headerHtml = UcanRender.renderListHeader(this._i18n);
 				contentHtml = UcanRender.renderDeviceList(this._i18n, this._loading, this._error, this._devices);
 		}
 
+		// 3. 只更新内容区域，而不是整个 shadowRoot
+		// 仅当内容真的发生变化时才更新 (防止无意义的重绘)
+		if (headerSlot.innerHTML !== headerHtml) {
+			headerSlot.innerHTML = headerHtml;
+		}
+		if (contentSlot.innerHTML !== contentHtml) {
+			contentSlot.innerHTML = contentHtml;
+		}
 
+		// // 渲染完整DOM
+		// shadow.innerHTML = `
+		// 	<style>${UcanStyles}</style>
+		// 	<div class="ucan-container">
+		// 		${headerHtml}
+		// 		${contentHtml}
+		// 	</div>
+		// `;
 
-		// 渲染完整DOM
-		shadow.innerHTML = `
-			<style>${UcanStyles}</style>
-			<div class="ucan-container">
-				${headerHtml}
-				${contentHtml}
-			</div>
-		`;
-
-		if (this._pageState.type === 1 && this._curvePage !== 'main') {
+		if (this._pageState.first_type == pageType_st.MAIN && this._pageState.second_type == pageType_nd.CHART) {
 			// 假设当 _curvePage 不是 'main' 时，显示的是曲线图
-			UcanRender.renderPowerCurve(this._i18n, shadow, this._pageState.data);
+			switch (this._pageState.chart_type) {
+				case ChartType.DAY:
+					UcanRender.renderPowerCurve_day(this._i18n, shadow, this._pageState.data);
+					break;
+				case ChartType.MONTH:
+					UcanRender.renderPowerCurve_month(this._i18n, shadow, this._pageState.data);
+					break;
+				case ChartType.YEAR:
+					UcanRender.renderPowerCurve_year(this._i18n, shadow, this._pageState.data);
+					break;
+				case ChartType.TOTAL:
+					UcanRender.renderPowerCurve_total(this._i18n, shadow, this._pageState.data);
+					break;
+			}
+
 		}
 
 		// 绑定事件

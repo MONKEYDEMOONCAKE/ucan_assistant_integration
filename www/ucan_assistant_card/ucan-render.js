@@ -20,7 +20,7 @@ export const UcanRender = {
             <div>
                 <select class="jump-select">
                     <option value="main" ${pageType === 1 ? 'selected' : ''}>${translations.main}</option>
-                    <option value="info" ${pageType === 2 ? 'selected' : ''}>${translations.info}</option>
+                    <option value="details" ${pageType === 2 ? 'selected' : ''}>${translations.info}</option>
                     <option value="alarm" ${pageType === 3 ? 'selected' : ''}>${translations.alarm}</option>
                     <option value="devinfo" ${pageType === 4 ? 'selected' : ''}>${translations.devinfo}</option>
                 </select>
@@ -209,7 +209,7 @@ export const UcanRender = {
                     <div class="power-item">
                         <div class="power-label">${translations.grid_energy}:</div>
                         <div class="power-value">
-                            ${powerData.usage_grid_today}/${powerData.usage_grid_total}kWh
+                            ${powerData.usage_grid_today.toFixed(2)}/${powerData.usage_grid_total.toFixed(2)}kWh
                             <button class="power-button">></button>
                         </div>
 
@@ -217,7 +217,7 @@ export const UcanRender = {
                     <div class="power-item">
                         <div class="power-label">${translations.load_energy}:</div>
                         <div class="power-value">
-                            ${powerData.usage_load_today}/${powerData.usage_load_total}kWh
+                            ${powerData.usage_load_today.toFixed(2)}/${powerData.usage_load_total.toFixed(2)}kWh
                             <button class="power-button">></button>
                         </div>
 
@@ -225,7 +225,7 @@ export const UcanRender = {
                     <div class="power-item">
                         <div class="power-label">${translations.solar_energy}:</div>
                         <div class="power-value">
-                            ${powerData.usage_solar_today}/${powerData.usage_solar_total}kWh
+                            ${powerData.usage_solar_today.toFixed(2)}/${powerData.usage_solar_total.toFixed(2)}kWh
                             <button class="power-button">></button>
                         </div>
 
@@ -233,7 +233,7 @@ export const UcanRender = {
                     <div class="power-item">
                         <div class="power-label">${translations.battery_energy}:</div>
                         <div class="power-value">
-                            ${powerData.usage_battery_today}/${powerData.usage_battery_total}kWh
+                            ${powerData.usage_battery_today.toFixed(2)}/${powerData.usage_battery_total.toFixed(2)}kWh
                             <button class="power-button">></button>
                         </div>
 
@@ -243,9 +243,8 @@ export const UcanRender = {
         `;
     },
 
-    //ok
-    renderCurve(translations, loading, error, device, data, date, timezone_effect) {
-        const chartContainer = document.getElementById('powerChart');
+    renderCurve(translations, loading, error, device, data, date, chart_type) {
+        // const chartContainer = document.getElementById('powerChart');
         console.log('start render curve')
         if (loading) {
             return `<div class="loading">${translations.loading}...</div>`;
@@ -257,35 +256,49 @@ export const UcanRender = {
             return `<div class="no-data">${translations.no_dev_data}</div>`;
         }
 
-        const formattedDate = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+        let formattedDate = null;
+        if(chart_type == "day")
+            formattedDate = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+        else if(chart_type == "month")
+            formattedDate = `${date.getFullYear()}-${date.getMonth() + 1}`;
+        else if (chart_type == "year")
+            formattedDate = `${date.getFullYear()}`;
 
+        console.log("chart_type:", chart_type, "formattedDate", formattedDate);
         return `
             <div class = "energy-curve-page">
+                <div class="select-button">
+                    <button class="day_btn">day</button>
+                    <button class="month_btn">month</button>
+                    <button class="year_btn">year</button>
+                    <button class="total_btn">total</button>
+                </div>
                 <div class="chart-container">
                     <!-- 给 canvas 一个固定的高度或者用 CSS 控制 -->
                     <canvas id="powerCurveChart" height="500"></canvas>
+                    <!-- 增加充放电饼图 and 柱状图 -->
+                    <!-- day 增加soc折线图 -->
                 </div>
             </div>
             <div class="date-selector">
-                <button class="date-btn prev-date">‹</button>
-                <span class="current-date">${formattedDate}</span>
-                <button class="date-btn next-date">›</button>
+                ${chart_type != "total" ? `
+                    <button class="date-btn prev-date">‹</button>
+                    <span class="current-date">${formattedDate}</span>
+                    <button class="date-btn next-date">›</button>` : ``}
             </div>
-            <div></div>
-            ${timezone_effect == 0 ? `<div class="text-center">${translations.timezone_err}</div>` : ''}
         `;
 
 
     },
 
     //ok
-    renderPowerCurve(translations, shadow, data) {
+    renderPowerCurve_day(translations, shadow, data) {
         const canvas = shadow.getElementById('powerCurveChart');
         if (!canvas) {
             console.warn('未找到图表容器 #powerCurveChart');
             return;
         }
-        console.log("data:", data)
+        console.log("day data:", data);
 
         // 如果已有图表实例，先销毁以防止内存泄漏或重叠
         if (window.powerChartInstance) {
@@ -297,19 +310,13 @@ export const UcanRender = {
             { border: '#2196F3', bg: 'rgba(33, 150, 243, 0.1)' }, // 蓝色（grid）
             { border: '#4CAF50', bg: 'rgba(76, 175, 80, 0.1)' }, // 绿色（pv）
             { border: '#FF9800', bg: 'rgba(255, 152, 0, 0.1)' }, // 橙色（bat）
-            { border: '#F44336', bg: 'rgba(244, 67, 54, 0.1)' }  // 红色（load）
+            { border: '#F44336', bg: 'rgba(244, 67, 54, 0.1)' },  // 红色（load）
+            { border: '#9C27B0', bg: 'rgba(156, 39, 176, 0.1)' }   // 紫色（soc）
         ];
 
         // 标准化数据：将单传感器数据转为多传感器格式，减少改动
         let sensorList = [];
-        if (data && Array.isArray(data.timeline) && Array.isArray(data.values)) {
-            // 兼容原有单传感器数据格式
-            sensorList = [{
-                label: '功率 (W)',
-                timeline: multiSensorData.timeline,
-                values: multiSensorData.values
-            }];
-        } else if (data && Array.isArray(data)) {
+        if (data && Array.isArray(data)) {
             // 多传感器数据格式（推荐）：[{label: '传感器1', timeline: [], values: []}, ...]
             sensorList = data.filter(item =>
                 item && Array.isArray(item.timeline) && Array.isArray(item.values) && item.timeline.length > 0
@@ -322,7 +329,7 @@ export const UcanRender = {
             canvas.getContext('2d').font = "16px sans-serif";
             canvas.getContext('2d').textAlign = "center";
             canvas.getContext('2d').textBaseline = "middle";
-            canvas.getContext('2d').fillText(`${translations.no_data_yet}`, canvas.width / 2, canvas.height / 2);
+            canvas.getContext('2d').fillText(``, canvas.width / 2, canvas.height / 2);      //  不显示加载中，因为这里没法判断加载状态。
             return;
         }
 
@@ -330,10 +337,10 @@ export const UcanRender = {
         const commonLabels = sensorList[0].timeline;
         //多传感器数据值
         const datasets = sensorList.map((sensor, index) => {
-            console.log('sensor data:', sensor);
+            // console.log('sensor data:', sensor);
             const color = sensorColors[index % sensorColors.length]; // 循环分配颜色
             return {
-                label: sensor.label || `${translations.power_sensor}${index+1} (W)`, // 传感器标签（图例显示）
+                label: sensor.label, // 传感器标签（图例显示）
                 data: sensor.values, // 当前传感器的Y轴数值
                 borderColor: color.border, // 独立线条颜色
                 backgroundColor: color.bg, // 独立填充颜色
@@ -424,6 +431,7 @@ export const UcanRender = {
                 }
             });
 
+
             canvas.ondblclick = function() {
                 if (window.powerChartInstance) {
                     window.powerChartInstance.resetZoom(); // 双击恢复原始视图
@@ -438,6 +446,471 @@ export const UcanRender = {
             canvas.getContext('2d').textAlign = "center";
             canvas.getContext('2d').textBaseline = "middle";
             canvas.getContext('2d').fillText(`${translations.curve_load_fail}`, canvas.width / 2, canvas.height / 2);
+        }
+    },
+
+    renderPowerCurve_month(translations, shadow, data) {
+        const canvas = shadow.getElementById('powerCurveChart');
+        if (!canvas) {
+            console.warn('未找到图表容器 #powerCurveChart');
+            return;
+        }
+        console.log("month data:", data);
+
+        // 如果已有图表实例，先销毁
+        if (window.powerChartInstance) {
+            window.powerChartInstance.destroy();
+        }
+
+        // 定义默认传感器颜色（保持与折线图一致）
+        const sensorColors = [
+            { border: '#2196F3', bg: 'rgba(33, 150, 243, 1)' }, // 蓝色（grid） - 增加透明度以便区分
+            { border: '#4CAF50', bg: 'rgba(76, 175, 80, 1)' }, // 绿色（pv）
+            { border: '#FF9800', bg: 'rgba(255, 152, 0, 1)' }, // 橙色（bat）
+            { border: '#F44336', bg: 'rgba(244, 67, 54, 1)' }, // 红色（load）
+        ];
+
+        // 防御性编程：检查数据是否存在
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = "16px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            // ctx.fillText(`No Data`, canvas.width / 2, canvas.height / 2);
+            return;
+        }
+        // 1. 提取 X 轴标签（月份）
+        // 使用第一个传感器的 timeline 作为标准（应该是 [1,2,3...31]）
+
+        const commonLabels = data[0].timeline.map(day => `${day}`);
+
+        // 2. 处理数据集
+        const datasets = data.map((sensor, index) => {
+            const color = sensorColors[index % sensorColors.length];
+            return {
+                label: sensor.label,
+                data: sensor.values, // Y轴数值  单位：kwh
+                backgroundColor: color.bg,
+                borderColor: color.border,
+                borderWidth: 1,
+                // 柱状图特有配置
+                borderRadius: 4, // 圆角
+                borderSkipped: false, // 不跳过边框，让柱子四边都有边框
+                // 分组柱状图间距控制
+                categoryPercentage: 0.8, // 控制柱子组的宽度（0-1）
+                barPercentage: 0.9,      // 控制柱子在组内的宽度（0-1）
+            };
+        });
+
+        // --- 图表配置 ---
+        try {
+            window.powerChartInstance = new Chart(canvas, {
+                type: 'bar', // 核心：改为 bar 类型
+                data: {
+                    labels: commonLabels, // X轴：月份
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        zoom: {
+                            // 启用缩放（双指/鼠标滚轮）
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                    speed: 0.1
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                mode: 'x', // 仅在 X 轴（月份轴）缩放
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: 'x',
+                                threshold: 10
+                            }
+                        },
+                        legend: {
+                            display: true
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: '#2196F3',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    // 显示单位
+                                    return `${context.dataset.label}: ${context.parsed.y} kWh`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            },
+                            ticks: {
+                                color: '#555',
+                                callback: function(value) {
+                                    return value + 'kWh'; // Y轴单位
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false // 隐藏X轴网格线，更清晰
+                            },
+                            ticks: {
+                                color: '#555'
+                            },
+                            // 重要：确保 X 轴是分类轴
+                            type: 'category',
+                            bounds: 'data',
+                            // 让 X 轴占据完整宽度
+                            offset: true
+                        }
+                    },
+                    // 交互模式
+                    interaction: {
+                        intersect: false, // 不要求鼠标精确在柱子上
+                        mode: 'index'   // 同类索引模式，方便查看同一个月的所有数据
+                    }
+                }
+            });
+
+            // 双击复原视图
+            canvas.ondblclick = function() {
+                if (window.powerChartInstance) {
+                    window.powerChartInstance.resetZoom();
+                }
+            };
+
+        } catch (err) {
+            console.error('月度图表绘制失败:', err);
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = "14px sans-serif";
+            ctx.fillStyle = "red";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(`${translations.curve_load_fail}`, canvas.width / 2, canvas.height / 2);
+        }
+    },
+
+    renderPowerCurve_year(translations, shadow, data) {
+        const canvas = shadow.getElementById('powerCurveChart');
+        if (!canvas) {
+            console.warn('未找到图表容器 #powerCurveChart');
+            return;
+        }
+        console.log("year data:", data);
+
+        // 如果已有图表实例，先销毁
+        if (window.powerChartInstance) {
+            window.powerChartInstance.destroy();
+        }
+
+        // 定义默认传感器颜色（保持与折线图一致）
+        const sensorColors = [
+            { border: '#2196F3', bg: 'rgba(33, 150, 243, 1)' }, // 蓝色（grid） - 增加透明度以便区分
+            { border: '#4CAF50', bg: 'rgba(76, 175, 80, 1)' }, // 绿色（pv）
+            { border: '#FF9800', bg: 'rgba(255, 152, 0, 1)' }, // 橙色（bat）
+            { border: '#F44336', bg: 'rgba(244, 67, 54, 1)' }, // 红色（load）
+        ];
+
+        // 防御性编程：检查数据是否存在
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = "16px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            // ctx.fillText(`No Data`, canvas.width / 2, canvas.height / 2);
+            return;
+        }
+        // 1. 提取 X 轴标签（月份）
+        // 使用第一个传感器的 timeline 作为标准（应该是 [1,2,3...12]）
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const commonLabels = data[0].timeline.map(month => monthNames[month - 1]);
+
+        // 2. 处理数据集
+        const datasets = data.map((sensor, index) => {
+            const color = sensorColors[index % sensorColors.length];
+            return {
+                label: sensor.label,
+                data: sensor.values, // Y轴数值  单位：kwh
+                backgroundColor: color.bg,
+                borderColor: color.border,
+                borderWidth: 1,
+                // 柱状图特有配置
+                borderRadius: 4, // 圆角
+                borderSkipped: false, // 不跳过边框，让柱子四边都有边框
+                // 分组柱状图间距控制
+                categoryPercentage: 0.8, // 控制柱子组的宽度（0-1）
+                barPercentage: 0.9,      // 控制柱子在组内的宽度（0-1）
+            };
+        });
+
+        // --- 图表配置 ---
+        try {
+            window.powerChartInstance = new Chart(canvas, {
+                type: 'bar', // 核心：改为 bar 类型
+                data: {
+                    labels: commonLabels, // X轴：月份
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        zoom: {
+                            // 启用缩放（双指/鼠标滚轮）
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                    speed: 0.1
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                mode: 'x', // 仅在 X 轴（月份轴）缩放
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: 'x',
+                                threshold: 10
+                            }
+                        },
+                        legend: {
+                            display: true
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: '#2196F3',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    // 显示单位
+                                    return `${context.dataset.label}: ${context.parsed.y} kWh`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            },
+                            ticks: {
+                                color: '#555',
+                                callback: function(value) {
+                                    return value + 'kWh'; // Y轴单位
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false // 隐藏X轴网格线，更清晰
+                            },
+                            ticks: {
+                                color: '#555'
+                            },
+                            // 重要：确保 X 轴是分类轴
+                            type: 'category',
+                            bounds: 'data',
+                            // 让 X 轴占据完整宽度
+                            offset: true
+                        }
+                    },
+                    // 交互模式
+                    interaction: {
+                        intersect: false, // 不要求鼠标精确在柱子上
+                        mode: 'index'   // 同类索引模式，方便查看同一个月的所有数据
+                    }
+                }
+            });
+
+            // 双击复原视图
+            canvas.ondblclick = function() {
+                if (window.powerChartInstance) {
+                    window.powerChartInstance.resetZoom();
+                }
+            };
+
+        } catch (err) {
+            console.error('月度图表绘制失败:', err);
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = "14px sans-serif";
+            ctx.fillStyle = "red";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(`${translations.curve_load_fail}`, canvas.width / 2, canvas.height / 2);
+        }
+    },
+
+    renderPowerCurve_total(translations, shadow, data) {
+        const canvas = shadow.getElementById('powerCurveChart');
+        if (!canvas) {
+            console.warn('未找到图表容器 #powerCurveChart');
+            return;
+        }
+        console.log("total data:", data);
+
+        // 如果已有图表实例，先销毁
+        if (window.powerChartInstance) {
+            window.powerChartInstance.destroy();
+        }
+
+        // 定义默认传感器颜色（保持与折线图一致）
+        const sensorColors = [
+            { border: '#2196F3', bg: 'rgba(33, 150, 243, 1)' }, // 蓝色（grid） - 增加透明度以便区分
+            { border: '#4CAF50', bg: 'rgba(76, 175, 80, 1)' }, // 绿色（pv）
+            { border: '#FF9800', bg: 'rgba(255, 152, 0, 1)' }, // 橙色（bat）
+            { border: '#F44336', bg: 'rgba(244, 67, 54, 1)' }, // 红色（load）
+        ];
+
+        // 防御性编程：检查数据是否存在
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = "16px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            // ctx.fillText(`No Data`, canvas.width / 2, canvas.height / 2);
+            return;
+        }
+        // 1. 提取 X 轴标签（年份）
+        // 使用第一个传感器的 timeline 作为标准
+        const commonLabels = data[0].timeline.map(year => `${year}`);
+
+        // 2. 处理数据集
+        const datasets = data.map((sensor, index) => {
+            const color = sensorColors[index % sensorColors.length];
+            return {
+                label: sensor.label,
+                data: sensor.values, // Y轴数值  单位：kwh
+                backgroundColor: color.bg,
+                borderColor: color.border,
+                borderWidth: 1,
+                // 柱状图特有配置
+                borderRadius: 4, // 圆角
+                borderSkipped: false, // 不跳过边框，让柱子四边都有边框
+                // 分组柱状图间距控制
+                categoryPercentage: 0.8, // 控制柱子组的宽度（0-1）
+                barPercentage: 0.9,      // 控制柱子在组内的宽度（0-1）
+            };
+        });
+
+        // --- 图表配置 ---
+        try {
+            window.powerChartInstance = new Chart(canvas, {
+                type: 'bar', // 核心：改为 bar 类型
+                data: {
+                    labels: commonLabels, // X轴：月份
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        zoom: {
+                            // 启用缩放（双指/鼠标滚轮）
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                    speed: 0.1
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                mode: 'x', // 仅在 X 轴（月份轴）缩放
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: 'x',
+                                threshold: 10
+                            }
+                        },
+                        legend: {
+                            display: true
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: '#2196F3',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    // 显示单位
+                                    return `${context.dataset.label}: ${context.parsed.y} kWh`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            },
+                            ticks: {
+                                color: '#555',
+                                callback: function(value) {
+                                    return value + 'kWh'; // Y轴单位
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false // 隐藏X轴网格线，更清晰
+                            },
+                            ticks: {
+                                color: '#555'
+                            },
+                            // 重要：确保 X 轴是分类轴
+                            type: 'category',
+                            bounds: 'data',
+                            // 让 X 轴占据完整宽度
+                            offset: true
+                        }
+                    },
+                    // 交互模式
+                    interaction: {
+                        intersect: false, // 不要求鼠标精确在柱子上
+                        mode: 'index'   // 同类索引模式，方便查看同一个月的所有数据
+                    }
+                }
+            });
+
+            // 双击复原视图
+            canvas.ondblclick = function() {
+                if (window.powerChartInstance) {
+                    window.powerChartInstance.resetZoom();
+                }
+            };
+
+        } catch (err) {
+            console.error('月度图表绘制失败:', err);
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = "14px sans-serif";
+            ctx.fillStyle = "red";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(`${translations.curve_load_fail}`, canvas.width / 2, canvas.height / 2);
         }
     },
 
@@ -456,7 +929,7 @@ export const UcanRender = {
 
         return `
             <div class="energy-main-page">
-                <div class="detail-button">
+                <div class="select-button">
                     <button class="bat_btn">bat</button>
                     <button class="mppt_btn">mppt</button>
                     <button class="load_btn">load</button>
@@ -472,6 +945,7 @@ export const UcanRender = {
 
     renderDetailContent(translations, data, detailPage, device) {
         console.log("inv:", device.inverter_model);
+        console.log("detailpage:", detailPage)
         switch (detailPage) {
             case 'bat':
                 return this.renderBatDetails(translations, data['bat'], device);

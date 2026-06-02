@@ -256,7 +256,8 @@ export const UcanStyles = `
         /* 核心：设置背景图片 */
         background-image: url('${BASE_PATH}src/house_clear.png'); /* 本地路径 */
         /* 让图片适配容器 */
-        background-size: cover; /* 覆盖整个容器, 保持比例(可选contain/100% 100%) */
+        // background-size: cover; /* 覆盖整个容器, 保持比例(可选contain/100% 100%) */
+        background-size: contain;
         background-position: center; /* 图片居中显示 */
         background-repeat: no-repeat; /* 禁止重复 */
         background-color: transparent;      //透明，父容器白色
@@ -441,7 +442,7 @@ export const UcanStyles = `
         padding: 0 6px;
     }
 
-    .detail-button{
+    .select-button{
         display: flex;          /* 启用Flex布局 */
         justify-content: space-between; /* 按键两端对齐，中间间距均匀 */
         width: 100%;            /* 占满父容器宽度（关键：否则对齐不生效） */
@@ -449,7 +450,7 @@ export const UcanStyles = `
         margin: 16px 0;         /* 可选：上下间距，优化排版 */
     }
 
-    .detail-button button {
+    .select-button button {
         width: 80px; /* 固定宽度，可根据需求调整 */
         height: 40px; /* 固定高度，可根据需求调整 */
         padding: 0; /* 清除默认内边距，避免影响尺寸 */
@@ -606,6 +607,7 @@ export const UcanStyles = `
 
 
     .ucan-container {
+        transform: translateZ(0);
         max-width: 50%;          /* 占据 1/2 宽度 */
         margin: 0 auto;          /* 水平居中 */
         padding: 16px;
